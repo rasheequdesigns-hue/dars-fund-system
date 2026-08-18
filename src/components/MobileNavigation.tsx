@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
  Landmark, Vault, GraduationCap, ClipboardList, UserCog,
@@ -23,35 +23,39 @@ const adminMoreItems = [
  { id: "security", label: "Security Protocol", icon: ShieldCheck, path: "/admin?showSecurity=true" },
 ];
 
-// ── Student navigation items ──────────────────────────────────────────────────
-// (student nav is rendered inline, no separate items array needed)
+interface SessionShape {
+ email?: string;
+ role?: string;
+ name?: string;
+ roll?: string;
+ id?: string;
+}
 
 export default function MobileNavigation() {
  const router = useRouter();
  const pathname = usePathname();
+ const searchParams = useSearchParams();
  const { theme, toggleTheme } = useTheme();
 
- const [session, setSession] = useState<any>(null);
+ const [session, setSession] = useState<SessionShape | null>(null);
  const [isMoreOpen, setIsMoreOpen] = useState(false);
  const [isMounted, setIsMounted] = useState(false);
 
  useEffect(() => {
+ const id = setTimeout(() => {
  setIsMounted(true);
- setSession(getSession());
- }, [pathname]); // re-read on route change so it stays in sync
+ setSession(getSession() as SessionShape | null);
+ }, 0);
+ return () => clearTimeout(id);
+ }, [pathname]);
 
- // Don't render anything on the login page or before hydration
  if (!isMounted || pathname === "/") return null;
 
  const role = session?.role ?? null;
 
- // If no session at all, render nothing
  if (!role) return null;
 
- const getActiveTab = () => {
- if (typeof window === "undefined") return "";
- return new URLSearchParams(window.location.search).get("tab") || "";
- };
+ const getActiveTab = () => searchParams.get("tab") || "";
 
  const isAdminTabActive = (path: string) => {
  const tab = path.split("?tab=")[1];

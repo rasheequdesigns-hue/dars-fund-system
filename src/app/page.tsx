@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
  ShieldCheck, Lock, ArrowRight, Loader2, School,
- Smartphone, User, Eye, EyeOff, ChevronDown
+ Smartphone, User, Eye, EyeOff
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { setSession } from "@/lib/session";
@@ -64,8 +64,9 @@ export default function LoginPage() {
  id: student.id,
  });
 
+ setLoading(false);
  router.push("/student/account");
- } catch (err: any) {
+ } catch (err: unknown) {
  setError("Something went wrong. Please try again.");
  setLoading(false);
  }
@@ -105,6 +106,7 @@ export default function LoginPage() {
 
  if (username === adminUser && password === adminPass) {
  setSession({ email: username, role: "admin", name: "Master Admin" });
+ setLoading(false);
  router.push("/admin");
  return;
  }
@@ -112,6 +114,7 @@ export default function LoginPage() {
  if (username === FALLBACK_ADMIN_USER && password === FALLBACK_ADMIN_PASS) {
  try { localStorage.removeItem("admin_session"); } catch {}
  setSession({ email: username, role: "admin", name: "Master Admin" });
+ setLoading(false);
  router.push("/admin");
  return;
  }

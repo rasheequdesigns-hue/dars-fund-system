@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -6,55 +6,104 @@ import {
  Wallet, LogOut, ArrowDownRight, ArrowUpRight,
  ShieldCheck, Receipt, Activity, ArrowLeft, TrendingUp, Moon, Sun
 } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { getSession, clearSession } from "@/lib/session";
 import { validateSession } from "@/lib/session-validation";
 import { useTheme } from "@/components/ThemeProvider";
 
+interface StudentTx {
+ id: string;
+ student_id: string;
+ amount: number;
+ type?: string;
+ description?: string;
+ created_at: string;
+}
+interface NotifShape {
+ id: string;
+ student_id?: string | null;
+ message: string;
+ end_at?: string | null;
+ school_fonts?: { name: string } | null;
+ font_id?: string | null;
+}
+interface FontShape { id: string; name: string; font_data?: string; }
+interface StudentInfoShape {
+ id: string;
+ full_name: string;
+ roll_id: string;
+ grade: string;
+ balance: number;
+ rating?: number;
+ email_account?: string;
+}
+
 export default function StudentAccountDashboard() {
  const router = useRouter();
  const { theme, toggleTheme } = useTheme();
 
- const [session, setSession] = useState<any>(null);
+ const [session, setSession] = useState<{ email?: string; role?: string; name?: string; roll?: string; id?: string; } | null>(null);
  const [balance, setBalance] = useState(0);
- const [transactions, setTransactions] = useState<any[]>([]);
- const [notifications, setNotifications] = useState<any[]>([]);
- const [fonts, setFonts] = useState<any[]>([]);
- const [studentInfo, setStudentInfo] = useState<any>(null);
+ const [transactions, setTransactions] = useState<StudentTx[]>([]);
+ const [notifications, setNotifications] = useState<NotifShape[]>([]);
+ const [fonts, setFonts] = useState<FontShape[]>([]);
+ const [studentInfo, setStudentInfo] = useState<StudentInfoShape | null>(null);
  const [loading, setLoading] = useState(true);
 
+ const fetchData = useCallback(async (rollId: string) => {
+ try {
+ const { data: student } = await supabase
+ .from("students")
+ .select("*")
+ .eq("roll_id", rollId)
+ .single();
+ if (student) {
+ setStudentInfo(student as StudentInfoShape);
+ setBalance(student.balance || 0);
+ const [{ data: n }, { data: trans }, { data: f }] = await Promise.all([
+ supabase
+ .from("school_notifications")
+ .select("*, school_fonts(name)")
+ .or(`student_id.is.null,student_id.eq.${student.id}`)
+ .order("created_at", { ascending: false }),
+ supabase
+ .from("fund_transactions")
+ .select("*")
+ .eq("student_id", student.id)
+ .order("created_at", { ascending: false }),
+ supabase.from("school_fonts").select("*"),
+ ]);
+ const now = new Date().getTime();
+ setNotifications(
+ (n || []).filter((notif) => !notif.end_at || new Date(notif.end_at).getTime() > now) as NotifShape[]
+ );
+ setTransactions((trans || []) as StudentTx[]);
+ setFonts((f || []) as FontShape[]);
+ if (loading) setLoading(false);
+ }
+ } catch (err) {
+ console.error(err);
+ if (loading) setLoading(false);
+ }
+ }, [loading]);
+
  useEffect(() => {
+ let cancelled = false;
  const validateAndFetch = async () => {
  const s = getSession();
  if (!s) { router.push("/"); return; }
  const isValid = await validateSession();
  if (!isValid) { clearSession(); router.push("/"); return; }
+ if (cancelled) return;
  setSession(s);
  if (s.roll) fetchData(s.roll);
+ if (cancelled) return;
+ setLoading(false);
  };
  validateAndFetch();
- }, []);
-
- const fetchData = async (rollId: string) => {
- try {
- const { data: student } = await supabase.from("students").select("*").eq("roll_id", rollId).single();
- if (student) {
- setStudentInfo(student);
- setBalance(student.balance);
- const [{ data: n }, { data: trans }, { data: f }] = await Promise.all([
- supabase.from("school_notifications").select("*, school_fonts(name)").or(`student_id.is.null,student_id.eq.${student.id}`).order("created_at", { ascending: false }),
- supabase.from("fund_transactions").select("*").eq("student_id", student.id).order("created_at", { ascending: false }),
- supabase.from("school_fonts").select("*"),
- ]);
- const now = new Date().getTime();
- setNotifications((n || []).filter((notif: any) => !notif.end_at || new Date(notif.end_at).getTime() > now));
- setTransactions(trans || []);
- setFonts(f || []);
- }
- } catch (err) { console.error(err); }
- finally { setLoading(false); }
- };
+ return () => { cancelled = true; };
+ }, [router, fetchData]);
 
  const stats = useMemo(() => {
  const now = new Date();
@@ -63,9 +112,9 @@ export default function StudentAccountDashboard() {
  const monthlyTxs = transactions.filter(t => new Date(t.created_at) >= startOfMonth);
  const yearlyTxs = transactions.filter(t => new Date(t.created_at) >= startOfYear);
  return {
- monthlyReceived: monthlyTxs.filter(t => t.amount > 0).reduce((a, t) => a + t.amount, 0),
- yearlyReceived: yearlyTxs.filter(t => t.amount > 0).reduce((a, t) => a + t.amount, 0),
- totalReceived: transactions.filter(t => t.amount > 0).reduce((a, t) => a + t.amount, 0),
+ monthlyReceived: monthlyTxs.filter(t => t.amount > 0).reduce((a, t) => a + (t.amount || 0), 0),
+ yearlyReceived: yearlyTxs.filter(t => t.amount > 0).reduce((a, t) => a + (t.amount || 0), 0),
+ totalReceived: transactions.filter(t => t.amount > 0).reduce((a, t) => a + (t.amount || 0), 0),
  totalSpent: Math.abs(transactions.filter(t => t.amount < 0).reduce((a, t) => a + (t.amount || 0), 0)),
  };
  }, [transactions]);
