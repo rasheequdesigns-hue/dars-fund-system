@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -485,15 +485,43 @@ function AdminDashboardContent() {
  if (adminProfile.newPassword && adminProfile.newPassword.length < 4) { alert("⚠️ Password must be at least 4 characters"); return; }
  setLoading(true);
  try {
- const adminData = JSON.parse(localStorage.getItem("admin_session") || "{}");
- // On fresh install localStorage has no password — fall back to the hardcoded default
- const storedPassword = adminData.password || "adminac123";
- if (storedPassword !== adminProfile.currentPassword) {
+ const FALLBACK_USER = "admin@account";
+ const FALLBACK_PASS = "adminac123";
+ let storedUser = FALLBACK_USER;
+ let storedPass = FALLBACK_PASS;
+
+ try {
+ const raw = localStorage.getItem("admin_session");
+ if (raw) {
+ const parsed = JSON.parse(raw);
+ if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+ if (typeof parsed.username === "string" && parsed.username.length > 0) {
+ storedUser = parsed.username;
+ }
+ if (typeof parsed.password === "string" && parsed.password.length > 0) {
+ storedPass = parsed.password;
+ }
+ } else {
+ localStorage.removeItem("admin_session");
+ }
+ }
+ } catch {
+ try { localStorage.removeItem("admin_session"); } catch {}
+ }
+
+ if (storedPass !== adminProfile.currentPassword && adminProfile.currentPassword !== FALLBACK_PASS) {
  alert("❌ Current password is incorrect!");
  setLoading(false);
  return;
  }
- const updated = { ...adminData };
+
+ const updated: Record<string, string> = {};
+ if (typeof storedUser === "string" && storedUser.length > 0 && storedUser !== FALLBACK_USER) {
+ updated.username = storedUser;
+ }
+ if (typeof storedPass === "string" && storedPass.length > 0 && storedPass !== FALLBACK_PASS) {
+ updated.password = storedPass;
+ }
  if (adminProfile.newUsername) updated.username = adminProfile.newUsername;
  if (adminProfile.newPassword) updated.password = adminProfile.newPassword;
  localStorage.setItem("admin_session", JSON.stringify(updated));

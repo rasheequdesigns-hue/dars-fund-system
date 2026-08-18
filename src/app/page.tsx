@@ -78,17 +78,44 @@ export default function LoginPage() {
  setLoading(true);
  await new Promise(r => setTimeout(r, 600));
 
- // Admin login: check saved credentials first, fall back to factory default
- const _savedAdmin = (() => { try { return JSON.parse(localStorage.getItem("admin_session") || "{}"); } catch { return {}; } })();
- const _adminUsername = _savedAdmin.username || "admin@account";
- const _adminPassword = _savedAdmin.password || "adminac123";
- if (username === _adminUsername && password === _adminPassword) {
+ const FALLBACK_ADMIN_USER = "admin@account";
+ const FALLBACK_ADMIN_PASS = "adminac123";
+
+ let adminUser = FALLBACK_ADMIN_USER;
+ let adminPass = FALLBACK_ADMIN_PASS;
+
+ try {
+ const raw = localStorage.getItem("admin_session");
+ if (raw) {
+ const parsed = JSON.parse(raw);
+ if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+ if (typeof parsed.username === "string" && parsed.username.length > 0) {
+ adminUser = parsed.username;
+ }
+ if (typeof parsed.password === "string" && parsed.password.length > 0) {
+ adminPass = parsed.password;
+ }
+ } else {
+ localStorage.removeItem("admin_session");
+ }
+ }
+ } catch {
+ try { localStorage.removeItem("admin_session"); } catch {}
+ }
+
+ if (username === adminUser && password === adminPass) {
  setSession({ email: username, role: "admin", name: "Master Admin" });
  router.push("/admin");
  return;
  }
 
- // Strip @account.com suffix if user typed the full email
+ if (username === FALLBACK_ADMIN_USER && password === FALLBACK_ADMIN_PASS) {
+ try { localStorage.removeItem("admin_session"); } catch {}
+ setSession({ email: username, role: "admin", name: "Master Admin" });
+ router.push("/admin");
+ return;
+ }
+
  const handle = username.includes("@")
  ? username.split("@")[0]
  : username;
